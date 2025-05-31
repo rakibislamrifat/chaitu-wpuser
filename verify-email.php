@@ -18,36 +18,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $otpExpiry = $_SESSION['otp_expiry'] ?? 0;
 
     if ($sessionOtp !== null && (string)$inputOtp === (string)$sessionOtp && time() < $otpExpiry) {
-        $data = $_SESSION['pending_signup'];
+        $data = unserialize($_SESSION['pending_signup'] ?? '');
 
-        // Final check for duplicates
         if (username_exists($data['username']) || email_exists($data['email'])) {
             $errors[] = "Username or email already taken.";
         } else {
-            // Register WordPress user
             $user_id = wp_insert_user([
-                'user_login'    => $data['username'],
-                'user_pass'     => $data['password'], // Use this instead of 'password_hash'
-                'user_email'    => $data['email'],
-                'first_name'    => $data['first_name'],
-                'last_name'     => $data['last_name'],
-                'display_name'  => $data['first_name'] . ' ' . $data['last_name'],
+                'user_login'    => sanitize_user($data['username']),
+                'user_pass'     => $data['password'],
+                'user_email'    => sanitize_email($data['email']),
+                'first_name'    => sanitize_text_field($data['first_name']),
+                'last_name'     => sanitize_text_field($data['last_name']),
+                'display_name'  => sanitize_text_field($data['first_name'] . ' ' . $data['last_name']),
             ]);
 
-            if (is_wp_error($user_id)) {
-                $errors[] = "Account creation failed: " . $user_id->get_error_message();
-            } else {
-                // Store extra info in usermeta
-                update_user_meta($user_id, 'dob', $data['dob']);
-                update_user_meta($user_id, 'address', $data['address']);
-                update_user_meta($user_id, 'phone', $data['phone']);
+            if (!is_wp_error($user_id)) {
+                // Insert additional data into custom userinformation table
+                global $wpdb;
+                $table = $wpdb->prefix . 'userinformation';
 
-                // Clear OTP-related session data
-                unset($_SESSION['pending_signup'], $_SESSION['email_otp'], $_SESSION['otp_expiry'], $_SESSION['email_to_verify']);
+                $dob = sanitize_text_field($data['dob'] ?? '');
+                $address = sanitize_textarea_field($data['address'] ?? '');
+                $phone = sanitize_text_field($data['phone'] ?? '');
 
-                // Optional: auto login or redirect
-                wp_redirect(home_url('/')); 
+                $wpdb->insert($table, [
+                    'user_id' => $user_id,
+                    'dob'     => $dob,
+                    'address' => $address,
+                    'phone'   => $phone,
+                ]);
+
+                // Clean up session
+                unset(
+                    $_SESSION['pending_signup'],
+                    $_SESSION['email_otp'],
+                    $_SESSION['otp_expiry'],
+                    $_SESSION['email_to_verify']
+                );
+
+                wp_redirect(home_url('/'));
                 exit;
+            } else {
+                $errors[] = "Account creation failed: " . $user_id->get_error_message();
             }
         }
     } else {
@@ -55,6 +67,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
+
+
+
+
+
+
 
 
 <!DOCTYPE html>

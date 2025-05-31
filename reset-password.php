@@ -26,25 +26,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
     $password_confirm = $_POST['password_confirm'] ?? '';
 
-    if (!$password) $errors[] = "Password is required.";
-    if (strlen($password) < 8) $errors[] = "Password must be at least 8 characters.";
-    if ($password !== $password_confirm) $errors[] = "Passwords do not match.";
+    // Password validations
+    if (!$password) {
+        $errors[] = "Password is required.";
+    } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{6,}$/', $password)) {
+        $errors[] = "Password must be at least 6 characters long and include uppercase, lowercase, a number, and a special character.";
+    }
+
+    if ($password !== $password_confirm) {
+        $errors[] = "Passwords do not match.";
+    }
 
     if (empty($errors)) {
-        // Reset password using WordPress core
+        // Reset password using WordPress function
         wp_set_password($password, $user_id);
 
-        // Clear reset token
+        // Clear reset token and session
         delete_user_meta($user_id, 'reset_token');
         delete_user_meta($user_id, 'reset_token_expiry');
-
-        // Clear session
         unset($_SESSION['reset_email']);
 
         $success = "Password reset successfully. You can now <a href='" . esc_url(home_url('/sign-in')) . "' class='chaitu-link'>login</a>.";
     }
 }
 ?>
+
 
 
 <!DOCTYPE html>
@@ -281,7 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="chaitu-password-requirements">
                 <strong>Password Requirements:</strong>
                 <ul>
-                    <li>At least 8 characters long</li>
+                    <li>At least 6 characters long</li>
                     <li>Include uppercase and lowercase letters</li>
                     <li>Include at least one number</li>
                     <li>Include at least one special character</li>

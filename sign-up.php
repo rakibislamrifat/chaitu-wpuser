@@ -55,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Basic validations
     if (!$first_name) $errors[] = "First name is required.";
     if (!$last_name) $errors[] = "Last name is required.";
+    
     if ($dob) {
         $dobDate = new DateTime($dob);
         $today = new DateTime();
@@ -62,11 +63,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $errors[] = "Date of birth is required.";
     }
+
     if (!$address) $errors[] = "Address is required.";
     if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Valid email is required.";
     if (!$phone) $errors[] = "Phone number is required.";
     if (!$username) $errors[] = "Username is required.";
-    if (!$password) $errors[] = "Password is required.";
+
+    // Password validation
+    if (!$password) {
+        $errors[] = "Password is required.";
+    } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{6,}$/', $password)) {
+        $errors[] = "Password must be at least 6 characters long and include uppercase, lowercase, a number, and a special character.";
+    }
+
     if ($password !== $password_confirm) $errors[] = "Passwords do not match.";
     if (!$terms) $errors[] = "You must accept the terms.";
 
@@ -77,7 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         $otp = random_int(100000, 999999);
-        $_SESSION['pending_signup'] = [
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+
+        $_SESSION['pending_signup'] = serialize([
             'first_name' => $first_name,
             'last_name' => $last_name,
             'dob' => $dob,
@@ -85,14 +96,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'email' => $email,
             'phone' => $phone,
             'username' => $username,
-            'password' => $password,
-        ];
+            'password' => $hashedPassword, // Securely store hashed password
+        ]);
         $_SESSION['email_to_verify'] = $email;
         $_SESSION['email_otp'] = (string)$otp;
         $_SESSION['otp_expiry'] = time() + 300;
 
         if (sendVerificationCode($email, $otp)) {
-            header('Location: ' . home_url('/verify-email')); // Change as needed
+            header('Location: ' . home_url('/verify-email')); // Redirect to verification
             exit;
         } else {
             $errors[] = "Failed to send verification email.";
@@ -100,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
+
 
 
 <!DOCTYPE html>
